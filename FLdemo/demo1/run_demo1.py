@@ -1,6 +1,8 @@
 # FedAvg demo1 run
 # 2025 04 26
 
+from lib_demo1 import SimpleMLP, DataLoader, test_dataset, num_clients, copy, train_client, client_datasets, aggregate_weights, test_global_model
+
 # 初始化全局模型
 global_model = SimpleMLP()
 

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hybrid App</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="app-bar">
+            <img src="./logo.png" class="logo">
+            <h1>PyWebView 混合应用</h1>
+        </header>
+
+        <div class="card">
+            <button class="btn" onclick="getSystemInfo()">
+                🖥️ 获取系统信息
+            </button>
+            <div class="info-box" id="sys-info"></div>
+
+            <div class="form-group">
+                <input type="text" id="input-data" placeholder="输入保存内容">
+                <button class="btn primary" onclick="saveData()">
+                    💾 保存数据
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化Python API
+        const api = pywebview.api
+
+        // 获取系统信息
+        async function getSystemInfo() {
+            const data = await api.get_sys_info()
+            document.getElementById('sys-info').innerHTML = `
+                <p>操作系统: ${data.os}</p>
+                <p>Python版本: ${data.python}</p>
+                <p>物理内存: ${data.memory}GB</p>
+            `
+        }
+
+        // 保存数据
+        async function saveData() {
+            const input = document.getElementById('input-data').value
+            const result = await api.save_data(input)
+            alert(`保存状态: ${result.status}\n内容: ${result.saved}`)
+        }
+    </script>
+</body>
+</html>
