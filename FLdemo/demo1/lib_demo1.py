@@ -1,5 +1,6 @@
 # FedAvg demo1 library
 # 2025 04 25
+# 两个全连接层构成的神经网络
 
 import torch
 import torch.nn as nn
