@@ -2,13 +2,16 @@
 # 训练使用到的库及函数
 
 import os
+import re
 import torch
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from MNIST_CNN import Model_CNN
+from pathlib import Path
 
 # 配置参数
 class FLConfig:
@@ -208,3 +211,115 @@ class FLTrainer:
         # 最终保存
         self.server.save_model("final_model.pt")
         print("训练完成！")
+
+# 绘制图片
+class TrainingVisualizer:
+    def __init__(self, log_path):
+        self.log_path = Path(log_path)
+        self.rounds = []
+        self.accuracies = []
+        self.losses = []
+        self.phase_changes = []
+
+        self._validate_file()
+        self._parse_log()
+
+    def _validate_file(self):
+        """验证日志文件是否存在且可读"""
+        if not self.log_path.exists():
+            raise FileNotFoundError(f"Log file not found: {self.log_path}")
+        if not self.log_path.is_file():
+            raise ValueError(f"Path is not a file: {self.log_path}")
+
+    def _parse_log(self):
+        """解析训练日志文件"""
+        pattern = r"Round (\d+).*Accuracy: (\d+\.\d+)%.*Loss: (\d+\.\d+)"
+        absolute_round = 0
+        prev_round = 0
+
+        with open(self.log_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                match = re.search(pattern, line)
+                if match:
+                    absolute_round += 1
+                    current_round = int(match.group(1))
+
+                    # 检测阶段变化
+                    if current_round <= prev_round:
+                        self.phase_changes.append(absolute_round)
+                    prev_round = current_round
+
+                    # 记录数据
+                    self.rounds.append(absolute_round)
+                    self.accuracies.append(float(match.group(2)))
+                    self.losses.append(float(match.group(3)))
+
+    def plot(self, show=True, figsize=(12, 6), annotate_every=1, offset=(0, 1)):
+        """生成训练曲线图"""
+        plt.style.use('seaborn-v0_8')
+        self.fig, ax1 = plt.subplots(figsize=figsize)
+
+        # 绘制准确率曲线
+        ax1.set_xlabel('Training Round', fontsize=12)
+        ax1.set_ylabel('Accuracy (%)', color='tab:blue', fontsize=12)
+        ax1.plot(self.rounds, self.accuracies,
+                 color='tab:blue', marker='o', markersize=4,
+                 linewidth=1.5, alpha=0.8, label='Accuracy', zorder=3)
+        ax1.set_ylim(0, 100)
+        ax1.grid(True, linestyle='--', alpha=0.5)
+
+        for idx, (x, y) in enumerate(zip(self.rounds, self.accuracies)):
+            if idx % annotate_every == 0:
+                ax1.text(x + offset[0], y + offset[1],
+                         f'{y:.2f}%',
+                         color='tab:blue',
+                         fontsize=8,
+                         rotation=45,
+                         ha='center',
+                         va='bottom',
+                         alpha=0.7,
+                         zorder=5)  # 确保标注在最上层
+
+        # 绘制损失曲线
+        ax2 = ax1.twinx()
+        ax2.set_ylabel('Loss', color='tab:red', fontsize=12)
+        ax2.plot(self.rounds, self.losses,
+                 color='tab:red', marker='x', markersize=4,
+                 linewidth=1.5, alpha=0.8, label='Loss')
+        ax2.set_ylim(0, max(self.losses) * 1.1)
+
+        # 添加阶段分割线
+        for pc in self.phase_changes:
+            ax1.axvline(x=pc, color='gray', linestyle='--', alpha=0.5)
+            ax1.text(pc, ax1.get_ylim()[0] + 5, f'Phase {self.phase_changes.index(pc) + 1}',
+                     rotation=90, verticalalignment='bottom', fontsize=8)
+
+        # 合并图例
+        lines, labels = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines + lines2, labels + labels2, loc='upper left')
+
+        plt.title(f"Training Progress: {self.log_path.name}", fontsize=14, pad=20)
+        plt.tight_layout()
+
+        if show:
+            plt.show()
+
+    def save_plot(self, save_path, dpi=300):
+        """保存图表到文件"""
+        self.fig.savefig(save_path, dpi=dpi, bbox_inches='tight')
+        plt.close()
+
+# 测试代码
+if __name__ == "__main__":
+    try:
+        # 假设 FLConfig 是包含 LOG_FILE 路径的配置类
+        visualizer = TrainingVisualizer(FLConfig.LOG_FILE)
+        visualizer.plot()
+        visualizer.save_plot("training_plot.png")
+    except Exception as e:
+        print(f"Error generating plot: {str(e)}")
