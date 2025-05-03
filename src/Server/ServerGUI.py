@@ -8,7 +8,7 @@ class ServerGUI(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("联邦学习服务器")
-        self.geometry("500x300")
+        self.geometry("600x400")
         # 初始化回调函数
         self.start_callback = None
         self.stop_callback = None

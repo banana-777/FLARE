@@ -1,6 +1,7 @@
 # Server.py
 import time
 import threading
+import tkinter as tk
 from ServerGUI import ServerGUI
 from libs.ConnectionManager import ConnectionManager
 
@@ -9,12 +10,23 @@ class Server:
     def __init__(self):
         self.gui = ServerGUI()
         self.conn_mgr = ConnectionManager()
+        # self.min_clients = 3  # 最小客户端数量要求
+        self.training = False
+
+        # 启动网络状态监控
+        self._start_server()
+        self._start_connection_monitor()
 
         # 设置回调
         self.gui.set_callbacks(self.start_training, self.stop_training)
 
-        # 启动网络状态监控
-        self._start_connection_monitor()
+    def _start_server(self):
+        """启动服务器监听"""
+        if self.conn_mgr.start_server():
+            print(f"服务器已启动在 {self.conn_mgr.host}:{self.conn_mgr.port}")
+            self.gui.start_btn.config(state=tk.NORMAL)  # 启用开始按钮
+        else:
+            print("服务器启动失败")
 
     def _start_connection_monitor(self):
         """启动连接状态监控线程"""
@@ -47,6 +59,9 @@ class Server:
 
     def stop_training(self):
         # 停止Socket服务器
+        self.training = False
+        self.gui.start_btn.config(state=tk.NORMAL)
+        self.gui.stop_btn.config(state=tk.DISABLED)
         self.conn_mgr.stop_server()
         print("=== 训练停止 ===")
 
