@@ -12,7 +12,7 @@ client_epochs = 1
 batch_size = 32
 
 # 测试数据加载器
-test_loader = DataLoader(test_dataset, batch_size=1000)
+test_loader = DataLoader(test_dataset, batch_size=1024)
 
 for round in range(num_rounds):
     print(f"\n=== Round {round + 1} ===")
