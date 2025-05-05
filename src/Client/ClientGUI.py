@@ -1,32 +1,35 @@
+
+import multiprocessing
+import threading
 import tkinter as tk
+from time import sleep
 from tkinter import ttk, filedialog
 import sys
-
 
 class ClientGUI(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("联邦学习客户端")
         self.geometry("600x400")
-
         # 初始化数据路径
         self.data_path = tk.StringVar()
-
         # 创建主容器
         self.main_frame = ttk.Frame(self)
         self.main_frame.pack(fill='both', expand=True, padx=10, pady=10)
-
         # 创建各功能区域
         self._create_control_panel()
         self._create_data_panel()
         self._create_status_panel()
         self._create_log_panel()
-
         # 重定向标准输出
         self._redirect_stdout()
+        # 连接管理器
+        # self.conn_mgr = ConnectionManager()
+        # self.server_host = '127.0.0.1'
+        # self.server_port = 8888
 
+    # 顶部控制按钮区域
     def _create_control_panel(self):
-        """创建顶部控制按钮区域"""
         control_frame = ttk.LabelFrame(self.main_frame, text="控制面板")
         control_frame.pack(fill='x', pady=5)
 
@@ -50,8 +53,17 @@ class ClientGUI(tk.Tk):
         )
         self.train_btn.pack(side='left', padx=5)
 
+        self.disconnect_btn = ttk.Button(
+            btn_container,
+            text="断开连接",
+            width=15,
+            state=tk.DISABLED,
+            command=self._handle_disconnect
+        )
+        self.disconnect_btn.pack(side='left', padx=5)
+
+    # 数据选择区域
     def _create_data_panel(self):
-        """创建数据选择区域"""
         data_frame = ttk.LabelFrame(self.main_frame, text="训练数据选择")
         data_frame.pack(fill='x', pady=5)
 
@@ -93,8 +105,8 @@ class ClientGUI(tk.Tk):
             value='file'
         ).pack(side='left', padx=10)
 
+    # 状态显示区域
     def _create_status_panel(self):
-        """创建状态显示区域"""
         status_frame = ttk.LabelFrame(self.main_frame, text="训练状态")
         status_frame.pack(fill='x', pady=5)
 
@@ -107,8 +119,8 @@ class ClientGUI(tk.Tk):
         self.progress = ttk.Progressbar(status_frame, mode='determinate')
         self.progress.pack(side='left', padx=5, fill='x', expand=True)
 
+    # 日志输出区域
     def _create_log_panel(self):
-        """创建日志输出区域"""
         log_frame = ttk.LabelFrame(self.main_frame, text="系统日志")
         log_frame.pack(fill='both', expand=True, pady=5)
 
@@ -124,9 +136,8 @@ class ClientGUI(tk.Tk):
         self.log_text.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
 
+    # 重定向标准输出到日志框
     def _redirect_stdout(self):
-        """重定向标准输出到日志框"""
-
         class RedirectOutput:
             def __init__(self, text_widget):
                 self.text_widget = text_widget
@@ -143,8 +154,8 @@ class ClientGUI(tk.Tk):
         sys.stdout = RedirectOutput(self.log_text)
         sys.stderr = RedirectOutput(self.log_text)
 
+    # 处理数据选择
     def _select_data(self):
-        """处理数据选择"""
         if self.data_type.get() == 'dir':
             path = filedialog.askdirectory(title="选择训练数据文件夹")
         else:
@@ -155,21 +166,44 @@ class ClientGUI(tk.Tk):
             self.train_btn.config(state=tk.NORMAL)
             print(f"已选择数据路径: {path}")
 
+    # 连接按钮点击
     def _handle_connect(self):
-        """处理连接按钮点击"""
-        # 连接服务器逻辑
-        self.conn_status.config(text="已连接", foreground='green')
-        print("成功连接到服务器")
+        # 子线程承担实际操作
+        def _connect_thread():
+            if self.conn_mgr.connect_to_server(self.server_host, self.server_port):
+                self.after(0, self._update_conn_status, True)
+                print("成功连接到服务器")
+            else:
+                self.after(0, self._update_conn_status, False)
 
+        # 禁用按钮防止重复点击
+        self.connect_btn.config(state=tk.DISABLED)
+        threading.Thread(target=_connect_thread, daemon=True).start()
+
+    # 更新连接状态显示
+    def _update_conn_status(self, is_connected):
+        if is_connected:
+            self.conn_status.config(text="已连接", foreground='green')
+            self.train_btn.config(state=tk.NORMAL)
+        else:
+            self.conn_status.config(text="连接失败", foreground='red')
+        self.connect_btn.config(state=tk.NORMAL)  # 恢复按钮状态
+
+    # 训练按钮点击
     def _handle_train(self):
-        """处理训练按钮点击"""
-        # 本地训练逻辑
-        print(f"开始使用 {self.data_path.get()} 进行训练")
+        print(f"开始使用 {self.data_path.get()} 数据进行训练")
         self._simulate_training()
 
-    def _simulate_training(self):
-        """模拟训练进度"""
+    # 断开连接处理
+    def _handle_disconnect(self):
+        if self.conn_mgr.client_socket:
+            self.conn_mgr.client_socket.close()
+        self.conn_status.config(text="未连接", foreground='red')
+        self.train_btn.config(state=tk.DISABLED)
+        print("已断开服务器连接")
 
+    # 模拟训练进度
+    def _simulate_training(self):
         def update_progress(progress):
             self.progress['value'] = progress
             self.update()
@@ -177,7 +211,23 @@ class ClientGUI(tk.Tk):
         for i in range(1, 101):
             self.after(50, update_progress, i)
 
-
-if __name__ == "__main__":
+def start_process(process_id):
+    print(f"进程 {process_id} 开始工作")
     client = ClientGUI()
     client.mainloop()
+
+if __name__ == "__main__":
+    multiprocessing.set_start_method('spawn')
+    # 启动n个客户端进程
+    n = 5
+    processes = []
+    for i in range(n):
+        p = multiprocessing.Process(target=start_process, args=(i,))
+        processes.append(p)
+        p.start()
+        sleep(1)
+    # 监控进程状态
+    while any(p.is_alive() for p in processes):
+        sleep(1)
+
+    print("所有进程执行完毕")

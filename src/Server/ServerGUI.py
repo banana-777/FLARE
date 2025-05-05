@@ -26,8 +26,8 @@ class ServerGUI(tk.Tk):
         # 重定向标准输出
         self._redirect_stdout()
 
+    # 顶部控制按钮区域
     def _create_control_panel(self):
-        """创建顶部控制按钮区域"""
         control_frame = ttk.LabelFrame(self.main_frame, text="控制面板")
         control_frame.pack(fill='x', pady=5)
 
@@ -35,6 +35,7 @@ class ServerGUI(tk.Tk):
         btn_container = ttk.Frame(control_frame)
         btn_container.pack(pady=5)
 
+        # 按钮设置
         self.start_btn = ttk.Button(
             btn_container,
             text="启动训练",
@@ -43,6 +44,7 @@ class ServerGUI(tk.Tk):
         )
         self.start_btn.pack(side='left', padx=5)
 
+        # 按钮设置
         self.stop_btn = ttk.Button(
             btn_container,
             text="停止训练",
@@ -52,8 +54,8 @@ class ServerGUI(tk.Tk):
         )
         self.stop_btn.pack(side='left', padx=5)
 
+    # 中间状态显示区域
     def _create_status_panel(self):
-        """创建中间状态显示区域"""
         status_frame = ttk.LabelFrame(self.main_frame, text="训练状态")
         status_frame.pack(fill='x', pady=5)
 
@@ -64,11 +66,9 @@ class ServerGUI(tk.Tk):
         self.client_label = ttk.Label(status_frame, textvariable=self.client_count)
         ttk.Label(status_frame, text="在线客户端:").pack(side='left')
         ttk.Label(status_frame, textvariable=self.client_count).pack(side='left')
-        # self.client_label = ttk.Label(status_frame, text="在线客户端: 0")
-        # self.client_label.pack(side='left', padx=10)
 
+    # 底部日志输出区域
     def _create_log_panel(self):
-        """创建底部日志输出区域"""
         log_frame = ttk.LabelFrame(self.main_frame, text="系统日志")
         log_frame.pack(fill='both', expand=True, pady=5)
 
@@ -88,9 +88,8 @@ class ServerGUI(tk.Tk):
         self.log_text.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
 
+    # 重定向标准输出到日志框
     def _redirect_stdout(self):
-        """重定向标准输出到日志框"""
-
         class RedirectOutput:
             def __init__(self, text_widget):
                 self.text_widget = text_widget
@@ -107,8 +106,8 @@ class ServerGUI(tk.Tk):
         sys.stdout = RedirectOutput(self.log_text)
         sys.stderr = RedirectOutput(self.log_text)
 
+    # 启动按钮点击函数
     def _handle_start(self):
-        """处理启动按钮点击"""
         if self.start_callback:
             try:
                 self.start_callback()
@@ -117,8 +116,8 @@ class ServerGUI(tk.Tk):
             except Exception as e:
                 print(f"启动失败: {str(e)}")
 
+    # 停止按钮点击函数
     def _handle_stop(self):
-        """处理停止按钮点击"""
         if self.stop_callback:
             try:
                 self.stop_callback()
@@ -127,13 +126,13 @@ class ServerGUI(tk.Tk):
             except Exception as e:
                 print(f"停止失败: {str(e)}")
 
+    # 设置回调函数
     def set_callbacks(self, start_func, stop_func):
-        """设置回调函数"""
         self.start_callback = start_func
         self.stop_callback = stop_func
 
+    # 更新客户端数量
     def update_client_count(self, count):
-        """线程安全更新客户端数量"""
         self.client_count.set(count)
 
 
