@@ -2,9 +2,7 @@
 
 import threading
 import sys
-import torch
 import tkinter as tk
-import torch.nn as nn
 from time import sleep
 from tkinter import ttk, filedialog
 from libs.ConnectionManager import ConnectionManager
@@ -201,14 +199,10 @@ class ClientGUI(tk.Tk):
         self.train_btn.config(state=tk.DISABLED)
         print("已断开服务器连接")
 
-    def update_progress(self, progress):
-        self.progress['value'] = progress
-        self.update()
-
     # 模拟训练进度
     def _simulate_training(self):
         for i in range(1, 101):
-            self.after(50, self.update_progress, i)
+            self.after(50, update_progress, i)
 
 class Client:
     def __init__(self):
@@ -223,28 +217,14 @@ class Client:
     # 连接服务器函数
     def connect_server(self):
         def _connect_thread():
-            self.conn_mgr.connect_to_server(self.server_host, self.server_port)
-            if self.conn_mgr.is_connected:
-                # 接收模型结构
-                arch = self.conn_mgr.receive_model_structure(self.conn_mgr.server_socket)
-                if not arch:
-                    return False
-
-                # 根据结构创建模型
-                self.model = self.build_model(arch)
-                self.conn_mgr.server_socket.sendall("MODEL_STRUCTURE_RECEIVED".encode('utf-8'))
-
-                # 接收参数
-                params = self.conn_mgr.receive_model_parameters(self.conn_mgr.server_socket)
-                if params:
-                    self.model.load_state_dict(params)
-                self.conn_mgr.server_socket.sendall("MODEL_PARAMETERS_RECEIVED".encode('utf-8'))
-
-            return False
+            if self.conn_mgr.connect_to_server(self.server_host, self.server_port):
+                self.gui.update_conn_status(True)
+                print("成功连接到服务器")
+            else:
+                self.gui.update_conn_status(False)
 
         threading.Thread(target=_connect_thread, daemon=True).start()
 
-    # 开始训练函数
     def start_training(self, data_path):
         def _training_thread():
             self.training = True
@@ -254,45 +234,15 @@ class Client:
                     if not self.training: break
                     self.gui.update_progress(epoch * 20)
                     self._send_model_update()
-                    sleep(2)
-                # self.gui.log("本地训练完成")
+                    sleep(1)
+                self.gui.log("本地训练完成")
             finally:
                 self.training = False
 
-        if self.conn_mgr.is_connected:
+        if self.conn_mgr.is_connected():
             threading.Thread(target=_training_thread, daemon=True).start()
         else:
-            # self.gui.log("错误：未连接服务器")
-            pass
-
-    # 构建模型
-    def build_model(self, arch):
-        layers = []
-        for layer in arch['layers']:
-            layer_class = layer['class']
-
-            # 卷积层
-            if layer_class == 'Conv2d':
-                layers.append(nn.Conv2d(
-                    in_channels=layer['in_channels'],
-                    out_channels=layer['out_channels'],
-                    kernel_size=layer['kernel_size'],
-                    padding=layer['padding']
-                ))
-                # 添加激活函数
-                if layer.get('activation') == 'ReLU':
-                    layers.append(nn.ReLU())
-
-            # 最大池化层
-            elif layer_class == 'MaxPool2d':
-                layers.append(nn.MaxPool2d(
-                    kernel_size=layer['kernel_size'],
-                    stride=layer['stride']
-                ))
-
-            # Dropout层
-            elif layer_class == 'Dropout':
-                layers.append(nn.Dropout(p=layer['p']))
+            self.gui.log("错误：未连接服务器")
 
             # 全连接层
             elif layer_class == 'Linear':
@@ -314,9 +264,8 @@ class Client:
         if self.conn_mgr.client_socket:
             self.conn_mgr.client_socket.close()
         self.training = False
-        self.gui.update_conn_status(False)
-        print("已断开服务器连接")
-        # self.gui.log("已断开服务器连接")
+        self.gui.update_connection_status(False)
+        self.gui.log("已断开服务器连接")
 
 if __name__ == "__main__":
     # 初始化并启动客户端
