@@ -4,7 +4,9 @@ import queue
 import time
 import threading
 import tkinter as tk
+from queue import Queue
 from ServerGUI import ServerGUI
+from ServerCore import ServerCore
 from libs.ConnectionManager import ConnectionManager
 from model.MNIST_CNN import Model_CNN
 
@@ -12,39 +14,86 @@ from model.MNIST_CNN import Model_CNN
 class Server:
     def __init__(self):
         self.gui = ServerGUI()
+        self.core = ServerCore(self)
         self.model = Model_CNN()
+        self.model_arch = {
+            'type': 'CNN',
+            'input_channels': 1,  # MNIST是单通道图像
+            'layers': [
+                # 第一卷积块
+                {
+                    'class': 'Conv2d',
+                    'in_channels': 1,
+                    'out_channels': 32,
+                    'kernel_size': 3,
+                    'padding': 1,
+                    'activation': 'ReLU'
+                },
+                {
+                    'class': 'MaxPool2d',
+                    'kernel_size': 2,
+                    'stride': 2
+                },
+
+                # 第二卷积块
+                {
+                    'class': 'Conv2d',
+                    'in_channels': 32,
+                    'out_channels': 64,
+                    'kernel_size': 3,
+                    'padding': 1,
+                    'activation': 'ReLU'
+                },
+                {
+                    'class': 'MaxPool2d',
+                    'kernel_size': 2,
+                    'stride': 2
+                },
+
+                # 正则化层
+                {
+                    'class': 'Dropout',
+                    'p': 0.5
+                },
+
+                # 全连接层
+                {
+                    'class': 'Linear',
+                    'in_features': 7 * 7 * 64,  # 经过两次池化后的尺寸: 28→14→7
+                    'out_features': 128,
+                    'activation': 'ReLU'
+                },
+                {
+                    'class': 'Linear',
+                    'in_features': 128,
+                    'out_features': 10
+                }
+            ]
+        }
         self.conn_mgr = ConnectionManager()
 
-        self.training = False
-
-        # 启动网络状态监控
-        self._start_server()
-        self._start_connection_monitor()
+        self.is_training = False
+        self.is_running = False
+        self.host = '0.0.0.0'
+        self.port = 8888
+        self.server_socket = None
+        self.clients_status = {}
+        self.status_queue = Queue()
+        '''
+        clients_status : key-client socket value-status
+        CONNECTED : 刚完成连接
+        READY0 : 接收完模型结构
+        READY1 : 接受完模型参数
+        TRAINING : 训练中
+        DEAD : 失去连接
+        '''
 
         # 设置回调
         self.gui.set_callbacks(self.start_training, self.stop_training)
 
-    def _start_server(self):
-        if self.conn_mgr.start_server():
-            print(f"=== 服务器已启动在 {self.conn_mgr.host}:{self.conn_mgr.port} ===")
-            self.gui.start_btn.config(state=tk.NORMAL)  # 启用开始按钮
-        else:
-            print("服务器启动失败")
-
-    # 监控线程
-    def _start_connection_monitor(self):
-        # 监控及更新客户端连接数
-        def monitor():
-            while self.conn_mgr.running:
-                try:
-                    # 非阻塞获取数据
-                    action, count = self.conn_mgr.status_queue.get_nowait()
-                    self.gui.after(0, self._safe_update_client, count)
-                except queue.Empty:
-                    self.gui.after(100, monitor)  # 重新调度
-                    break
-
-        self.gui.after(100, monitor)  # 通过GUI事件循环调度
+        # 启动网络状态监控
+        self.core.start_server()
+        threading.Thread(target=self.core.wait_connection, daemon=True).start()
 
     # 安全更新客户端数量
     def _safe_update_client(self, count):
@@ -72,6 +121,6 @@ class Server:
         print("=== 训练停止 ===")
 
 if __name__ == "__main__":
-    server = Server()  # 使用Server类包装实例
+    server = Server()
     server.gui.mainloop()
 

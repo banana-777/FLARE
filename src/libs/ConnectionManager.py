@@ -1,161 +1,32 @@
 # Socket连接池管理 05 02 ShenJiaLong
 
-import socket
-import threading
 import pickle
 import zlib
 import hashlib
 import struct
-from queue import Queue
-from time import sleep
 from model.MNIST_CNN import Model_CNN
 
 
 class ConnectionManager:
     def __init__(self, host='0.0.0.0', port=8888):
-        # 服务器状态
-        self.host = host
-        self.port = port
-        self.clients_status = {}
-        self.status_queue = Queue()
-        self.running = False
-
         # 客户端状态
         self.is_connected = False
         # 服务器套接字
         self.server_socket = None
-
         # 初始化模型
         self.model = Model_CNN()
-
-    def start_server(self):
-        try:
-            self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.server.bind((self.host, self.port))
-            self.server.listen(5)
-            self.running = True
-
-            # 先返回成功再启动线程
-            accept_thread = threading.Thread(target=self._accept_connections)
-            accept_thread.daemon = True
-            accept_thread.start()
-
-            return True  # 确保在最后返回
-        except Exception as e:
-            print(f"服务器启动失败: {str(e)}")
-            return False
 
     def stop_server(self):
         self.running = False
         self.server.close()
 
-    # 接受客户端连接
-    def _accept_connections(self):
-        while self.running:
-            try:
-                client, addr = self.server.accept()
-                print(f"客户端连接: {addr[0]}:{addr[1]}")
-                self.clients_status.setdefault(client, "CONNECTED")
-                self.status_queue.put(('connect', len(self.clients_status)))
-                threading.Thread(target=self._handle_client, args=(client, )).start()
-            except:
-                break
-
     # 处理客户端连接
     def _handle_client(self, client):
-        remote_addr = client.getpeername()
+
         # 模型结构
-        model_arch = {
-            'type': 'CNN',
-            'input_channels': 1,  # MNIST是单通道图像
-            'layers': [
-                # 第一卷积块
-                {
-                    'class': 'Conv2d',
-                    'in_channels': 1,
-                    'out_channels': 32,
-                    'kernel_size': 3,
-                    'padding': 1,
-                    'activation': 'ReLU'
-                },
-                {
-                    'class': 'MaxPool2d',
-                    'kernel_size': 2,
-                    'stride': 2
-                },
-
-                # 第二卷积块
-                {
-                    'class': 'Conv2d',
-                    'in_channels': 32,
-                    'out_channels': 64,
-                    'kernel_size': 3,
-                    'padding': 1,
-                    'activation': 'ReLU'
-                },
-                {
-                    'class': 'MaxPool2d',
-                    'kernel_size': 2,
-                    'stride': 2
-                },
-
-                # 正则化层
-                {
-                    'class': 'Dropout',
-                    'p': 0.5
-                },
-
-                # 全连接层
-                {
-                    'class': 'Linear',
-                    'in_features': 7 * 7 * 64,  # 经过两次池化后的尺寸: 28→14→7
-                    'out_features': 128,
-                    'activation': 'ReLU'
-                },
-                {
-                    'class': 'Linear',
-                    'in_features': 128,
-                    'out_features': 10
-                }
-            ]
-        }
-        # 向client发送模型结构
-        self.send_model_structure(model_arch, client)
-        # 等待客户端响应
-        ack = client.recv(1024).decode('utf-8')
-        if ack == "MODEL_STRUCTURE_RECEIVED":
-            print(f"客户端接收模型结构成功 {remote_addr[0]}:{remote_addr[1]}")
-            # 向client发送初始参数
-            initial_params = self.model.state_dict()
-            self.send_model_parameters(initial_params, client)
-            # 等待客户端响应
-            ack = client.recv(1024).decode('utf-8')
-            if ack == "MODEL_PARAMETERS_RECEIVED":
-                print(f"客户端接收模型参数成功 {remote_addr[0]}:{remote_addr[1]}")
-                self.clients_status[client] = "READY"
+        pass
 
 
-        # 等待客户端确认
-        # ack = self.receive_data(client)
-
-    # 客户端连接服务器
-    def connect_to_server(self, server_host, server_port):
-        try:
-            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.server_socket.connect((server_host, server_port))
-            self.server_socket.settimeout(15)  # 超时时间
-            self.is_connected = True
-            return True
-        except socket.timeout:
-            print("连接超时，请检查服务器状态")
-            return False
-        except ConnectionRefusedError:
-            print("连接被拒绝，服务器未启动")
-            return False
-        except Exception as e:
-            print(f"连接异常: {str(e)}")
-            return False
 
     def send_data(self, data, mysocket):
         if isinstance(data, str):
@@ -207,19 +78,6 @@ class ConnectionManager:
                 return None
             data.extend(packet)
         return bytes(data)
-
-    # 发送模型结构
-    def send_model_structure(self, model_arch, mysocket):
-        try:
-            serialized = pickle.dumps(model_arch)
-            checksum = hashlib.md5(serialized).digest()
-            data = checksum + serialized
-            remote_addr = mysocket.getpeername()
-            print(f"向客户端发送模型结构 {remote_addr[0]}:{remote_addr[1]}")
-            return self._send_binary(data, mysocket)
-        except Exception as e:
-            print(f"发送模型结构失败: {str(e)}")
-            return False
 
     # 发送模型参数
     def send_model_parameters(self, params, mysocket, compress=True):

@@ -1,10 +1,10 @@
+# Client GUI class
 
+import sys
 import multiprocessing
-import threading
 import tkinter as tk
 from time import sleep
 from tkinter import ttk, filedialog
-import sys
 
 class ClientGUI(tk.Tk):
     def __init__(self):
@@ -23,10 +23,6 @@ class ClientGUI(tk.Tk):
         self._create_log_panel()
         # 重定向标准输出
         self._redirect_stdout()
-        # 连接管理器
-        # self.conn_mgr = ConnectionManager()
-        # self.server_host = '127.0.0.1'
-        # self.server_port = 8888
 
     # 顶部控制按钮区域
     def _create_control_panel(self):
@@ -36,29 +32,12 @@ class ClientGUI(tk.Tk):
         btn_container = ttk.Frame(control_frame)
         btn_container.pack(pady=5)
 
-        self.connect_btn = ttk.Button(
-            btn_container,
-            text="连接服务器",
-            width=15,
-            command=self._handle_connect
-        )
-        self.connect_btn.pack(side='left', padx=5)
-
-        self.train_btn = ttk.Button(
-            btn_container,
-            text="开始训练",
-            width=15,
-            state=tk.DISABLED,
-            command=self._handle_train
-        )
-        self.train_btn.pack(side='left', padx=5)
-
         self.disconnect_btn = ttk.Button(
             btn_container,
             text="断开连接",
             width=15,
             state=tk.DISABLED,
-            command=self._handle_disconnect
+            # command=self._handle_disconnect
         )
         self.disconnect_btn.pack(side='left', padx=5)
 
@@ -115,10 +94,6 @@ class ClientGUI(tk.Tk):
         self.conn_status = ttk.Label(status_frame, text="未连接", foreground='red')
         self.conn_status.pack(side='left', padx=10)
 
-        ttk.Label(status_frame, text="训练进度:").pack(side='left')
-        self.progress = ttk.Progressbar(status_frame, mode='determinate')
-        self.progress.pack(side='left', padx=5, fill='x', expand=True)
-
     # 日志输出区域
     def _create_log_panel(self):
         log_frame = ttk.LabelFrame(self.main_frame, text="系统日志")
@@ -163,53 +138,17 @@ class ClientGUI(tk.Tk):
 
         if path:
             self.data_path.set(path)
-            self.train_btn.config(state=tk.NORMAL)
+            # self.train_btn.config(state=tk.NORMAL)
             print(f"已选择数据路径: {path}")
 
-    # 连接按钮点击
-    def _handle_connect(self):
-        # 子线程承担实际操作
-        def _connect_thread():
-            if self.conn_mgr.connect_to_server(self.server_host, self.server_port):
-                self.after(0, self._update_conn_status, True)
-                print("成功连接到服务器")
-            else:
-                self.after(0, self._update_conn_status, False)
-
-        # 禁用按钮防止重复点击
-        self.connect_btn.config(state=tk.DISABLED)
-        threading.Thread(target=_connect_thread, daemon=True).start()
-
     # 更新连接状态显示
-    def _update_conn_status(self, is_connected):
-        if is_connected:
-            self.conn_status.config(text="已连接", foreground='green')
-            self.train_btn.config(state=tk.NORMAL)
-        else:
-            self.conn_status.config(text="连接失败", foreground='red')
-        self.connect_btn.config(state=tk.NORMAL)  # 恢复按钮状态
-
-    # 训练按钮点击
-    def _handle_train(self):
-        print(f"开始使用 {self.data_path.get()} 数据进行训练")
-        self._simulate_training()
-
-    # 断开连接处理
-    def _handle_disconnect(self):
-        if self.conn_mgr.client_socket:
-            self.conn_mgr.client_socket.close()
-        self.conn_status.config(text="未连接", foreground='red')
-        self.train_btn.config(state=tk.DISABLED)
-        print("已断开服务器连接")
-
-    # 模拟训练进度
-    def _simulate_training(self):
-        def update_progress(progress):
-            self.progress['value'] = progress
-            self.update()
-
-        for i in range(1, 101):
-            self.after(50, update_progress, i)
+    def update_conn_status(self, is_connected):
+        def update_conn_status_thread():
+            if is_connected:
+                self.conn_status.config(text="已连接", foreground='green')
+            else:
+                self.conn_status.config(text="连接失败", foreground='red')
+        self.after(10, update_conn_status_thread)
 
 def start_process(process_id):
     print(f"进程 {process_id} 开始工作")
