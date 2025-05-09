@@ -16,6 +16,7 @@ class Server:
         self.gui = ServerGUI()
         self.core = ServerCore(self)
         self.model = Model_CNN()
+        self.conn_mgr = ConnectionManager()
         self.model_arch = {
             'type': 'CNN',
             'input_channels': 1,  # MNIST是单通道图像
@@ -70,12 +71,14 @@ class Server:
                 }
             ]
         }
-        self.conn_mgr = ConnectionManager()
+        self.model_data = []
 
         self.is_training = False
         self.is_running = False
+        self.is_started = False # 是否开始训练
         self.host = '0.0.0.0'
         self.port = 8888
+        self.rounds = 10
         self.server_socket = None
         self.clients_status = {}
         self.status_queue = Queue()
@@ -94,6 +97,7 @@ class Server:
         # 启动网络状态监控
         self.core.start_server()
         threading.Thread(target=self.core.wait_connection, daemon=True).start()
+        threading.Thread(target=self.core.func_training, args = (self.rounds, ), daemon=True).start()
 
     # 安全更新客户端数量
     def _safe_update_client(self, count):
@@ -101,16 +105,8 @@ class Server:
         self.gui.update_idletasks()  # 强制立即刷新
 
     def start_training(self):
-        def _real_training():
-            print("=== 训练开始 ===")
-            for i in range(1, 6):
-                time.sleep(1)
-                print(f"第 {i} 轮训练完成")
-                self.gui.after(0, lambda: self.gui.round_label.config(text=f"当前轮次: {i - 1}"))
-
-        train_thread = threading.Thread(target=_real_training)
-        train_thread.daemon = True  # 设为守护线程
-        train_thread.start()
+        self.is_started = True
+        print("===  开始训练  ===")
 
     def stop_training(self):
         # 停止Socket服务器

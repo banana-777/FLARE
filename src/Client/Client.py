@@ -7,7 +7,7 @@ from ClientCore import ClientCore
 
 class Client:
     def __init__(self):
-        self.gui = ClientGUI()
+        self.gui = ClientGUI(self)
         self.core = ClientCore(self)
         self.conn_mgr = ConnectionManager()
 
@@ -18,6 +18,8 @@ class Client:
         self.server_socket = None
         self.model_arch = None
         self.model = None
+        self.train_data = None
+        self.test_data = None
 
         self.core.connect_server(self.server_host, self.server_port)
         threading.Thread(target=self.core.msg_handler, daemon=True).start()

@@ -1,18 +1,25 @@
 # Client GUI class
-
+import os
 import sys
 import multiprocessing
 import tkinter as tk
+from pathlib import Path
 from time import sleep
 from tkinter import ttk, filedialog
 
+import torch
+
+
 class ClientGUI(tk.Tk):
-    def __init__(self):
+    def __init__(self, FATHER_CLASS):
         super().__init__()
+        self.father = FATHER_CLASS
         self.title("联邦学习客户端")
         self.geometry("600x400")
         # 初始化数据路径
         self.data_path = tk.StringVar()
+        self.test_data = None
+        self.train_data = None
         # 创建主容器
         self.main_frame = ttk.Frame(self)
         self.main_frame.pack(fill='both', expand=True, padx=10, pady=10)
@@ -138,8 +145,17 @@ class ClientGUI(tk.Tk):
 
         if path:
             self.data_path.set(path)
-            # self.train_btn.config(state=tk.NORMAL)
-            print(f"已选择数据路径: {path}")
+            # 构建文件路径
+            train_path = Path(path) / f"client_train.pt"
+            test_path = Path(path) / f"client_test.pt"
+            # 验证文件存在性
+            if not (train_path.exists() and test_path.exists()):
+                raise FileNotFoundError("缺失必要的训练/测试文件")
+
+            # 加载数据
+            self.father.train_data = torch.load(str(train_path))
+            self.father.test_data = torch.load(str(test_path))
+            print(f"已选择并加载数据: {path}")
 
     # 更新连接状态显示
     def update_conn_status(self, is_connected):
