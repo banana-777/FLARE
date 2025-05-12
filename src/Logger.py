@@ -9,7 +9,7 @@ class Logger:
         # 分解文件名和扩展名
         base, ext = os.path.splitext(log_file)
         # 生成时间戳格式：年月日_时分秒
-        timestamp = datetime.now().strftime("%m%d_%H%M")
+        timestamp = datetime.now().strftime("%m%d_%H%M%S")
         # 组合新文件名
         self.log_file = f"{base}_{timestamp}{ext}"
         self._init_log_file()

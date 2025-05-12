@@ -232,3 +232,46 @@ class ClientCore:
                                                accuracy = accuracy,duration = duration)
         print("=== 本地训练完成 ===")
         return self.father.model.state_dict()
+
+    # 客户端参数压缩
+    def stc_compress(self, state_dict, sparsity=0.01, gamma=0.001):
+        compressed_dict = {}
+        for name, param in state_dict.items():
+            # 展平参数为1D张量
+            flat_tensor = param.data.view(-1)
+
+            # 计算阈值保留前k个最大元素
+            k = max(1, int(sparsity * flat_tensor.numel()))
+            values, indices = torch.topk(flat_tensor.abs(), k)
+            threshold = values[-1]
+
+            # 创建三元掩码
+            mask = torch.zeros_like(flat_tensor)
+            mask[indices] = 1
+            positive_mask = (flat_tensor > threshold).float() * mask
+            negative_mask = (flat_tensor < -threshold).float() * mask
+
+            # 生成三元值
+            compressed_tensor = gamma * (positive_mask - negative_mask)
+
+            # 记录非零元素的索引和符号
+            nonzero_indices = torch.nonzero(compressed_tensor).squeeze()
+            signs = torch.sign(compressed_tensor[nonzero_indices])
+
+            compressed_dict[name] = {
+                'shape': param.shape,
+                'indices': nonzero_indices.cpu().numpy(),
+                'signs': signs.cpu().numpy(),
+                'gamma': gamma
+            }
+        return compressed_dict
+
+    # STC集成压缩打包
+    def pack_model_parameters_2(self, state_dict: dict) -> bytes:
+        compressed_dict = self.stc_compress(state_dict)  # 添加压缩步骤
+        buffer = io.BytesIO()
+        torch.save(compressed_dict, buffer, _use_new_zipfile_serialization=True, pickle_protocol=5)
+        serialized = buffer.getvalue()
+        checksum = hashlib.sha256(serialized).digest()
+        header = struct.pack('>I', len(serialized))
+        return header + checksum + serialized

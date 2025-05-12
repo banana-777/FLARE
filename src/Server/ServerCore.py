@@ -224,10 +224,6 @@ class ServerCore:
         accuracy, loss = self.evaluate_accuracy( self.father.model, test_loader, device)
         print(f'测试准确率: {accuracy:.2f}%')
         self.father.logger.log(f"第 {round} 轮 准确率:{accuracy} 损失:{loss}", "TEST")
-        # self.father.logger.log_train_stats(epoch = -1,
-        #                                    loss = loss,
-        #                                    accuracy = accuracy,
-        #                                    duration = -1)
 
     # 计算正确率
     def evaluate_accuracy(self, model, test_loader, device='cpu', total_loss=0.0):
@@ -249,3 +245,16 @@ class ServerCore:
         accuracy = 100 * correct / total
         avg_loss = total_loss / total  # 计算平均损失
         return accuracy, avg_loss
+
+    # STC解压
+    def stc_decompress(self, compressed_dict):
+        state_dict = {}
+        for name, meta in compressed_dict.items():
+            # 创建全零张量
+            tensor = torch.zeros(meta['shape'].numel(), dtype=torch.float32)
+
+            # 恢复三元值
+            tensor[meta['indices']] = meta['gamma'] * torch.from_numpy(meta['signs'])
+
+            state_dict[name] = tensor.view(*meta['shape'])
+        return state_dict

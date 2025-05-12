@@ -5,7 +5,7 @@ import tkinter as tk
 from queue import Queue
 from ServerGUI import ServerGUI
 from ServerCore import ServerCore
-from model.MNIST_CNN import Model_CNN
+from MNIST_CNN import Model_CNN
 from Logger import Logger
 
 
