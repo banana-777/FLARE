@@ -2,11 +2,13 @@
 
 import io
 import socket
+import sys
 import threading
 import pickle
 from time import sleep
 import numpy as np
 import torch
+import torch.nn as nn
 import torchvision
 from torch.utils.data import DataLoader
 import struct
@@ -28,6 +30,7 @@ class ServerCore:
 
         print(f"Server started on {self.father.host}:{self.father.port}")
         self.father.gui.start_btn.config(state=tk.NORMAL)
+        self.father.logger.log("服务器初始化完成","INFO")
 
     # 处理连接
     def wait_connection(self):
@@ -35,6 +38,7 @@ class ServerCore:
             client_socket, addr = self.father.server_socket.accept()
             self.father.clients_status[client_socket] = "CONNECTED"
             print(f"Receive connection from {addr}")
+            self.father.logger.log(f"连接到 {addr}", "COMM")
             self.father.gui.update_client_count(len(self.father.clients_status))
 
             # 为每个客户端创建新线程
@@ -64,32 +68,31 @@ class ServerCore:
     def func_CONNECTED(self, client_socket, addr):
         data = self.pack_model_data(self.father.model_arch)
         remote_addr = client_socket.getpeername()
-        print(f"Send model structure to {remote_addr[0]}:{remote_addr[1]}")
         # 协调准备
         client_socket.sendall("SEND_MODEL_STRUCTURE".encode())
         ack = client_socket.recv(1024).decode('utf-8')
         if ack == "READY_MODEL_STRUCTURE":
             client_socket.sendall(data)
             ack = client_socket.recv(1024).decode('utf-8')
+            self.father.logger.log_comm_stats(f"结构上传 {remote_addr[0]}:{remote_addr[1]}",
+                                              data_size=sys.getsizeof(data))
             if ack == "MODEL_STRUCTURE_RECEIVED":
                 self.father.clients_status[client_socket] = "READY0"
-                print(f"Send model structure success")
 
     # READY0状态 发送模型参数
     def func_READY0(self, client_socket, addr):
         data = self.pack_model_parameters(self.father.model.state_dict())
         remote_addr = client_socket.getpeername()
-        print(f"Send model parameters to {remote_addr[0]}:{remote_addr[1]}")
         # 协调准备
         client_socket.sendall("SEND_MODEL_PARAMETERS".encode())
         ack = client_socket.recv(1024).decode('utf-8')
         if ack == "READY_MODEL_PARAMETERS":
             client_socket.sendall(data)
-            # print(f"[SERVER] 发送参数总长度: {len(data)} bytes")
+            self.father.logger.log_comm_stats(f"参数上传 {remote_addr[0]}:{remote_addr[1]}",
+                                              data_size=sys.getsizeof(data))
             ack = client_socket.recv(1024).decode('utf-8')
             if ack == "MODEL_PARAMETERS_RECEIVED":
                 self.father.clients_status[client_socket] = "READY1"
-                print(f"Send model parameters success")
 
     # READY1状态 协调进入TRAINING状态
     def func_READY1(self, client_socket):
@@ -98,6 +101,9 @@ class ServerCore:
         ack = client_socket.recv(1024).decode('utf-8')
         if ack == "READY_START_TRAIN":
             new_dict = self.recv_model_parameters(client_socket)
+            remote_addr = client_socket.getpeername()
+            self.father.logger.log_comm_stats(f"参数接收 {remote_addr[0]}:{remote_addr[1]}",
+                                              data_size=sys.getsizeof(new_dict))
             self.father.model_data.append(new_dict)
             self.father.clients_status[client_socket] = "TRAINING"
 
@@ -118,7 +124,7 @@ class ServerCore:
                 self.father.model.load_state_dict(selected_state_dict)
                 for key in  self.father.clients_status.keys():
                     self.father.clients_status[key] = "READY1"
-                self.test_model()
+                self.test_model(round)
                 round += 1
 
     # 模型结构打包函数
@@ -202,7 +208,7 @@ class ServerCore:
         return selected_params
 
     # 测试模型
-    def test_model(self):
+    def test_model(self, round):
         transform = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize((0.1307,), (0.3081,))  # MNIST 标准归一化参数
@@ -215,11 +221,16 @@ class ServerCore:
         )
         test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False)
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        accuracy = self.evaluate_accuracy( self.father.model, test_loader, device)
+        accuracy, loss = self.evaluate_accuracy( self.father.model, test_loader, device)
         print(f'测试准确率: {accuracy:.2f}%')
+        self.father.logger.log(f"第 {round} 轮 准确率:{accuracy} 损失:{loss}", "TEST")
+        # self.father.logger.log_train_stats(epoch = -1,
+        #                                    loss = loss,
+        #                                    accuracy = accuracy,
+        #                                    duration = -1)
 
     # 计算正确率
-    def evaluate_accuracy(self, model, test_loader, device='cpu'):
+    def evaluate_accuracy(self, model, test_loader, device='cpu', total_loss=0.0):
         model.to(device)
         model.eval()
         correct = 0
@@ -229,8 +240,12 @@ class ServerCore:
                 images = images.to(device)
                 labels = labels.to(device)
                 outputs = model(images)
+                # 计算损失
+                loss = nn.CrossEntropyLoss()(outputs, labels)
+                total_loss += loss.item() * labels.size(0)
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
         accuracy = 100 * correct / total
-        return accuracy
+        avg_loss = total_loss / total  # 计算平均损失
+        return accuracy, avg_loss

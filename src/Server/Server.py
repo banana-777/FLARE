@@ -6,6 +6,7 @@ from queue import Queue
 from ServerGUI import ServerGUI
 from ServerCore import ServerCore
 from model.MNIST_CNN import Model_CNN
+from Logger import Logger
 
 
 class Server:
@@ -13,6 +14,7 @@ class Server:
         self.gui = ServerGUI()
         self.core = ServerCore(self)
         self.model = Model_CNN()
+        self.logger = Logger("服务器日志.log")
         self.model_arch = {
             'type': 'CNN',
             'input_channels': 1,  # MNIST是单通道图像

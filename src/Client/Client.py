@@ -3,11 +3,13 @@
 import threading
 from ClientGUI import ClientGUI
 from ClientCore import ClientCore
+from Logger import Logger
 
 class Client:
     def __init__(self):
         self.gui = ClientGUI(self)
         self.core = ClientCore(self)
+        self.logger = Logger("客户端日志.log")
 
         self.is_training = False
         self.is_connected = False

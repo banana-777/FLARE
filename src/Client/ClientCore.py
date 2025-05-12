@@ -1,6 +1,8 @@
 # Client Core function class
 
 import io
+import sys
+import time
 from time import sleep
 
 import torch
@@ -27,6 +29,7 @@ class ClientCore:
                 self.father.server_socket.connect((host, port))
                 self.father.is_connected = True
                 self.father.gui.update_conn_status(True)
+                self.father.logger.log("成功连接到服务器","INFO")
                 if self.TEST_STATUS:
                     print("connect server success")
         threading.Thread(target=_connect_server_thread, daemon=True).start()
@@ -65,7 +68,9 @@ class ClientCore:
         if calculated_checksum != received_checksum:
             raise ValueError("数据校验失败")
         else:
-            print("recv model structure success")
+            remote_addr = sock.getpeername()
+            self.father.logger.log_comm_stats(f"接收结构 {remote_addr[0]}:{remote_addr[1]}",
+                                              data_size=sys.getsizeof(serialized))
             sock.sendall("MODEL_STRUCTURE_RECEIVED".encode())
         # 反序列化
         self.father.model_arch = pickle.loads(serialized)
@@ -82,6 +87,9 @@ class ClientCore:
             raise ValueError("参数校验失败: 数据可能被篡改")
         else:
             sock.sendall("MODEL_PARAMETERS_RECEIVED".encode())
+            remote_addr = sock.getpeername()
+            self.father.logger.log_comm_stats(f"接收参数 {remote_addr[0]}:{remote_addr[1]}",
+                                              data_size=sys.getsizeof(serialized))
         buffer = io.BytesIO(serialized)
         state_dict = torch.load(buffer, map_location='cpu', weights_only=False)  # 强制加载到CPU
         # 加载到当前模型
@@ -158,6 +166,8 @@ class ClientCore:
         remote_addr = self.father.server_socket.getpeername()
         print(f"Send model parameters to {remote_addr[0]}:{remote_addr[1]}")
         self.father.server_socket.sendall(data)
+        self.father.logger.log_comm_stats(f"接收结构 {remote_addr[0]}:{remote_addr[1]}",
+                                          data_size=sys.getsizeof(data))
 
     # 模型参数打包函数
     def pack_model_parameters(self, state_dict: dict) -> bytes:
@@ -174,7 +184,7 @@ class ClientCore:
     def train_model(self, epochs):
         if not all([self.father.model, self.father.train_data, self.father.test_data]):
             raise ValueError("模型或数据未正确初始化")
-
+        start_time = time.time()
         train_dataset = TensorDataset(
             self.father.train_data['images'],
             self.father.train_data['labels'].long()  # 确保标签为int64类型
@@ -213,8 +223,12 @@ class ClientCore:
                           f"Loss: {loss.item():.4f}")
             avg_loss = total_loss / len(train_loader)
             accuracy = 100 * correct / total
+            end_time = time.time()
+            duration = end_time - start_time
             print(f"Epoch [{epoch}/{epochs}] 完成, "
                   f"平均损失: {avg_loss:.4f}, "
                   f"训练准确率: {accuracy:.2f}%")
+            self.father.logger.log_train_stats(epoch = epoch, loss = avg_loss,
+                                               accuracy = accuracy,duration = duration)
         print("=== 本地训练完成 ===")
         return self.father.model.state_dict()
