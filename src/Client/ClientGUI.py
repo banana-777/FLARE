@@ -1,5 +1,5 @@
 # Client GUI class
-import os
+
 import sys
 import multiprocessing
 import tkinter as tk
@@ -44,7 +44,6 @@ class ClientGUI(tk.Tk):
             text="断开连接",
             width=15,
             state=tk.DISABLED,
-            # command=self._handle_disconnect
         )
         self.disconnect_btn.pack(side='left', padx=5)
 

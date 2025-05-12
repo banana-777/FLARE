@@ -1,7 +1,6 @@
 # 客户端主入口 05 02 ShenJiaLong
 
 import threading
-from libs.ConnectionManager import ConnectionManager
 from ClientGUI import ClientGUI
 from ClientCore import ClientCore
 
@@ -9,7 +8,6 @@ class Client:
     def __init__(self):
         self.gui = ClientGUI(self)
         self.core = ClientCore(self)
-        self.conn_mgr = ConnectionManager()
 
         self.is_training = False
         self.is_connected = False

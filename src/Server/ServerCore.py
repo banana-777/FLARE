@@ -5,12 +5,10 @@ import socket
 import threading
 import pickle
 from time import sleep
-
 import numpy as np
 import torch
 import torchvision
 from torch.utils.data import DataLoader
-import zlib
 import struct
 import hashlib
 import tkinter as tk
@@ -115,9 +113,6 @@ class ServerCore:
                 # 遍历数组  执行聚合    清空数组    写入model 状态都置为READY1
                 print(f"===  第 {round} 轮  ===")
                 self.father.gui.after(0, lambda: self.father.gui.round_label.config(text=f"当前轮次: {round}"))
-                # if round == rounds:
-                #     for key in self.father.clients_status:
-                #         self.func_READY1(key)
                 selected_state_dict = self.krum_aggregate(self.father.model_data, 1)
                 self.father.model_data.clear()
                 self.father.model.load_state_dict(selected_state_dict)
@@ -156,16 +151,9 @@ class ServerCore:
             raise ValueError("参数校验失败: 数据可能被篡改")
         else:
             print("recv model parameters success")
-            # sock.sendall("MODEL_PARAMETERS_RECEIVED".encode())
         buffer = io.BytesIO(serialized)
         state_dict = torch.load(buffer, map_location='cpu', weights_only=False)  # 强制加载到CPU
         return state_dict
-        # 加载到当前模型
-        # if hasattr(self.father, 'model'):
-        #     self.father.model.load_state_dict(state_dict)
-        #     print("模型参数加载成功")
-        # else:
-        #     raise RuntimeError("未检测到模型结构，请先接收模型架构")
 
     # 接收指定字节数
     def _recv_exact(self, sock, n: int) -> bytes:

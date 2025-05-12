@@ -1,13 +1,10 @@
 # Server.py
 
-import queue
-import time
 import threading
 import tkinter as tk
 from queue import Queue
 from ServerGUI import ServerGUI
 from ServerCore import ServerCore
-from libs.ConnectionManager import ConnectionManager
 from model.MNIST_CNN import Model_CNN
 
 
@@ -16,7 +13,6 @@ class Server:
         self.gui = ServerGUI()
         self.core = ServerCore(self)
         self.model = Model_CNN()
-        self.conn_mgr = ConnectionManager()
         self.model_arch = {
             'type': 'CNN',
             'input_channels': 1,  # MNIST是单通道图像
@@ -113,7 +109,6 @@ class Server:
         self.training = False
         self.gui.start_btn.config(state=tk.NORMAL)
         self.gui.stop_btn.config(state=tk.DISABLED)
-        self.conn_mgr.stop_server()
         print("=== 训练停止 ===")
 
 if __name__ == "__main__":

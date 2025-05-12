@@ -12,7 +12,6 @@ import threading
 
 import torch.nn as nn
 import torch.optim as optim
-from fontTools.misc.timeTools import epoch_diff
 from torch.utils.data import TensorDataset, DataLoader
 
 class ClientCore:
@@ -71,7 +70,6 @@ class ClientCore:
         # 反序列化
         self.father.model_arch = pickle.loads(serialized)
         self.father.model = self.build_model(self.father.model_arch)
-        # print(self.father.model)
 
     # 接收模型参数
     def recv_model_parameters(self, sock):
@@ -79,12 +77,10 @@ class ClientCore:
         data_len = struct.unpack('>I', header)[0]
         received_checksum = self._recv_exact(sock, 32)
         serialized = self._recv_exact(sock, data_len)
-        # print(f"[CLIENT] 接收参数总长度: {4 + 32 + data_len} bytes")
         calculated_checksum = hashlib.sha256(serialized).digest()
         if calculated_checksum != received_checksum:
             raise ValueError("参数校验失败: 数据可能被篡改")
         else:
-            print("recv model parameters success")
             sock.sendall("MODEL_PARAMETERS_RECEIVED".encode())
         buffer = io.BytesIO(serialized)
         state_dict = torch.load(buffer, map_location='cpu', weights_only=False)  # 强制加载到CPU
@@ -94,10 +90,6 @@ class ClientCore:
             print("模型参数加载成功")
         else:
             raise RuntimeError("未检测到模型结构，请先接收模型架构")
-        # print("5秒后开始训练")
-        # sleep(5)
-        # self.test_train()
-        # self.func()
 
     # 接收指定字节数
     def _recv_exact(self, sock, n: int) -> bytes:
@@ -165,16 +157,7 @@ class ClientCore:
         data = self.pack_model_parameters(self.father.model.state_dict())
         remote_addr = self.father.server_socket.getpeername()
         print(f"Send model parameters to {remote_addr[0]}:{remote_addr[1]}")
-        # 协调准备
-        # self.father.server_socket.sendall("SEND_MODEL_PARAMETERS".encode())
-        # ack = self.father.server_socket.recv(1024).decode('utf-8')
-        # if ack == "READY_MODEL_PARAMETERS":
         self.father.server_socket.sendall(data)
-            # print(f"[SERVER] 发送参数总长度: {len(data)} bytes")
-            # ack = self.father.server_socket.recv(1024).decode('utf-8')
-            # if ack == "MODEL_PARAMETERS_RECEIVED":
-            #     self.father.clients_status[self.father.server_socket] = "READY1"
-            #     print(f"Send model parameters success")
 
     # 模型参数打包函数
     def pack_model_parameters(self, state_dict: dict) -> bytes:
@@ -235,116 +218,3 @@ class ClientCore:
                   f"训练准确率: {accuracy:.2f}%")
         print("=== 本地训练完成 ===")
         return self.father.model.state_dict()
-
-    # 测试训练流程
-    def test_train(self):
-        epochs = 10
-
-        # ================= 0. 前置校验 =================
-        if not all([self.father.model, self.father.train_data, self.father.test_data]):
-            raise ValueError("模型或数据未正确初始化")
-
-        # ================= 1. 准备数据 =================
-        # 创建TensorDataset
-        train_dataset = TensorDataset(
-            self.father.train_data['images'],
-            self.father.train_data['labels'].long()  # 确保标签为int64类型
-        )
-
-        # 创建DataLoader
-        train_loader = DataLoader(
-            dataset=train_dataset,
-            batch_size=128,
-            shuffle=True,
-            num_workers=2
-        )
-
-        # ================= 2. 训练配置 =================
-        optimizer = optim.SGD(
-            self.father.model.parameters(),
-            lr=0.01,
-            momentum=0.9
-        )
-        criterion = nn.CrossEntropyLoss()
-
-        # ================= 3. 训练循环 =================
-        self.father.model.train()
-        print("\n=== 开始本地训练 ===")
-        for epoch in range(1, epochs + 1):
-            total_loss = 0.0
-            correct = 0
-            total = 0
-
-            for batch_idx, (data, target) in enumerate(train_loader):
-                optimizer.zero_grad()
-
-                # 前向传播
-                outputs = self.father.model(data)
-                loss = criterion(outputs, target)
-
-                # 反向传播
-                loss.backward()
-                optimizer.step()
-
-                # 统计指标
-                total_loss += loss.item()
-                _, predicted = torch.max(outputs.data, 1)
-                total += target.size(0)
-                correct += (predicted == target).sum().item()
-
-                # 打印批次日志
-                if (batch_idx + 1) % 10 == 0:
-                    print(f"Epoch [{epoch}/{epochs}], "
-                          f"Batch [{batch_idx + 1}/{len(train_loader)}], "
-                          f"Loss: {loss.item():.4f}")
-
-            # 打印epoch统计
-            avg_loss = total_loss / len(train_loader)
-            accuracy = 100 * correct / total
-            print(f"Epoch [{epoch}/{epochs}] 完成, "
-                  f"平均损失: {avg_loss:.4f}, "
-                  f"训练准确率: {accuracy:.2f}%")
-
-        # ================= 4. 返回更新参数 =================
-        print("=== 本地训练完成 ===")
-        return self.father.model.state_dict()
-
-
-    def func(self):
-        """本地测试模型性能"""
-        # ================= 1. 准备数据 =================
-        test_dataset = TensorDataset(
-            self.father.test_data['images'],
-            self.father.test_data['labels'].long()
-        )
-
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=128,
-            shuffle=False
-        )
-
-        # ================= 2. 测试过程 =================
-        self.father.model.eval()
-        criterion = nn.CrossEntropyLoss()
-        total_loss = 0.0
-        correct = 0
-        total = 0
-
-        print("\n=== 开始本地测试 ===")
-        with torch.no_grad():
-            for data, target in test_loader:
-                outputs = self.father.model(data)
-                loss = criterion(outputs, target)
-
-                total_loss += loss.item()
-                _, predicted = torch.max(outputs.data, 1)
-                total += target.size(0)
-                correct += (predicted == target).sum().item()
-
-        # ================= 3. 输出结果 =================
-        avg_loss = total_loss / len(test_loader)
-        accuracy = 100 * correct / total
-        print(f"测试完成: 平均损失 {avg_loss:.4f}, "
-              f"准确率 {accuracy:.2f}%")
-        return accuracy
