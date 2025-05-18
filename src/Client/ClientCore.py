@@ -203,7 +203,7 @@ class ClientCore:
         criterion = nn.CrossEntropyLoss()
         self.father.model.train()
         print("\n=== 开始本地训练 ===")
-        for epoch in range(1, epochs + 1):
+        for epoch in range(1, epochs):
             total_loss = 0.0
             correct = 0
             total = 0
@@ -217,7 +217,7 @@ class ClientCore:
                 _, predicted = torch.max(outputs.data, 1)
                 total += target.size(0)
                 correct += (predicted == target).sum().item()
-                if (batch_idx + 1) % 10 == 0:
+                if (batch_idx + 1) % 16 == 0:
                     print(f"Epoch [{epoch}/{epochs}], "
                           f"Batch [{batch_idx + 1}/{len(train_loader)}], "
                           f"Loss: {loss.item():.4f}")
